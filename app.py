@@ -100,11 +100,16 @@ with st.sidebar:
     st.markdown("---")
     st.info("💡 **Tip:** Use the sliders to predict temperature for custom weather conditions!")
 
-# Filter data based on date range
-if len(date_range) == 2:
+# Filter data safely based on date range selection
+if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
     filtered_df = df[(df["Date"].dt.date >= date_range[0]) & (df["Date"].dt.date <= date_range[1])]
 else:
     filtered_df = df.copy()
+
+# Prevent calculations if the filtered date range yields zero results
+if filtered_df.empty:
+    st.error("⚠️ No data available for the selected date range. Please choose a different range.")
+    st.stop()
 
 # Prediction Section
 st.markdown("### 🔮 Live Temperature Prediction")
@@ -138,36 +143,46 @@ st.markdown("### 📊 Key Weather Metrics")
 mcol1, mcol2, mcol3, mcol4, mcol5 = st.columns(5)
 
 with mcol1:
-    st.markdown(f'''<div class="metric-card" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);">
-        st.markdown(f'<div class="metric-value">{filtered_df["Temperature"].mean():.1f}°C</div>', unsafe_allow_html=True)
+    st.markdown(f'''
+    <div class="metric-card" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);">
+        <div class="metric-value">{filtered_df["Temperature"].mean():.1f}°C</div>
         <div class="metric-label">Avg Temperature</div>
-    </div>''', unsafe_allow_html=True)
+    </div>
+    ''', unsafe_allow_html=True)
 
 with mcol2:
-    st.markdown(f'''<div class="metric-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+    st.markdown(f'''
+    <div class="metric-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
         <div class="metric-value">{filtered_df["Humidity"].mean():.0f}%</div>
         <div class="metric-label">Avg Humidity</div>
-    </div>''', unsafe_allow_html=True)
+    </div>
+    ''', unsafe_allow_html=True)
 
 with mcol3:
-    st.markdown(f'''<div class="metric-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+    st.markdown(f'''
+    <div class="metric-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
         <div class="metric-value">{filtered_df["WindSpeed"].mean():.1f}</div>
         <div class="metric-label">Avg Wind (km/h)</div>
-    </div>''', unsafe_allow_html=True)
+    </div>
+    ''', unsafe_allow_html=True)
 
 with mcol4:
     rainy_days = (filtered_df["Rainfall"] > 0).sum()
-    st.markdown(f'''<div class="metric-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+    st.markdown(f'''
+    <div class="metric-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
         <div class="metric-value">{rainy_days}</div>
         <div class="metric-label">Rainy Days</div>
-    </div>''', unsafe_allow_html=True)
+    </div>
+    ''', unsafe_allow_html=True)
 
 with mcol5:
     total_rain = filtered_df["Rainfall"].sum()
-    st.markdown(f'''<div class="metric-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+    st.markdown(f'''
+    <div class="metric-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
         <div class="metric-value">{total_rain:.1f}mm</div>
         <div class="metric-label">Total Rainfall</div>
-    </div>''', unsafe_allow_html=True)
+    </div>
+    ''', unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -236,150 +251,22 @@ with tab2:
                         hover_data=["Date"])
         fig.update_layout(template="plotly_white")
         st.plotly_chart(fig, use_container_width=True)
-    
-    st.markdown("#### Weekly Temperature Heatmap")
-    filtered_df["Week"] = filtered_df["Date"].dt.isocalendar().week
-    filtered_df["Weekday"] = filtered_df["Date"].dt.day_name()
-    weekly_temp = filtered_df.groupby(["Week", "Weekday"])["Temperature"].mean().reset_index()
-    pivot_temp = weekly_temp.pivot(index="Weekday", columns="Week", values="Temperature")
-    
-    weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    pivot_temp = pivot_temp.reindex([d for d in weekday_order if d in pivot_temp.index])
-    
-    fig = px.imshow(pivot_temp, color_continuous_scale="RdYlBu_r",
-                   title="Temperature Heatmap by Week & Day",
-                   labels=dict(color="Temp (°C)"))
-    fig.update_layout(template="plotly_white")
-    st.plotly_chart(fig, use_container_width=True)
 
 with tab3:
-    col_c, col_d = st.columns(2)
-    
-    with col_c:
-        st.markdown("#### Humidity Over Time")
-        fig = px.area(filtered_df, x="Date", y="Humidity",
-                     color_discrete_sequence=["#1e88e5"],
-                     title="Humidity Area Chart")
-        fig.update_layout(template="plotly_white")
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col_d:
-        st.markdown("#### Rainfall Events")
-        rain_df = filtered_df[filtered_df["Rainfall"] > 0].copy()
-        if len(rain_df) > 0:
-            fig = px.bar(rain_df, x="Date", y="Rainfall", color="Temperature",
-                        color_continuous_scale="YlOrRd",
-                        title="Rainfall Events (Colored by Temperature)")
-            fig.update_layout(template="plotly_white")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No rainfall data in selected range.")
-    
-    st.markdown("#### Correlation Matrix")
-    corr_cols = ["Temperature", "Humidity", "WindSpeed", "Rainfall"]
-    corr = filtered_df[corr_cols].corr()
-    fig = px.imshow(corr, text_auto=".2f", color_continuous_scale="RdBu_r",
-                   zmin=-1, zmax=1,
-                   title="Weather Variable Correlations")
-    fig.update_layout(template="plotly_white", height=500)
-    st.plotly_chart(fig, use_container_width=True)
+    st.markdown("#### 💧 Humidity & Rain Analysis")
+    fig3 = px.line(filtered_df, x="Date", y=["Humidity", "Rainfall"], 
+                   title="Humidity and Rainfall System Trends Over Time",
+                   color_discrete_map={"Humidity": "#1e88e5", "Rainfall": "#764ba2"})
+    fig3.update_layout(template="plotly_white")
+    st.plotly_chart(fig3, use_container_width=True)
 
 with tab4:
-    st.markdown("#### Complete Weather Dataset")
-    
-    display_df = filtered_df.copy()
-    display_df["Temp_Category"] = display_df["Temperature"].apply(
-        lambda x: "🔥 Hot" if x > 32 else "☀️ Warm" if x > 27 else "🌤 Mild" if x > 23 else "❄️ Cool"
-    )
-    display_df["Rain_Status"] = display_df["Rainfall"].apply(
-        lambda x: "🌧 Rainy" if x > 5 else "💧 Light" if x > 0 else "☀️ Dry"
-    )
-    
-    col_e, col_f = st.columns([3, 1])
-    with col_e:
-        search = st.text_input("🔍 Search by date (YYYY-MM-DD)")
-    with col_f:
-        sort_by = st.selectbox("Sort by", ["Date", "Temperature", "Humidity", "Rainfall"])
-    
-    if search:
-        display_df = display_df[display_df["Date"].astype(str).str.contains(search)]
-    
-    display_df = display_df.sort_values(sort_by, ascending=(sort_by == "Date"))
-    
-    st.dataframe(display_df[["Date", "Temperature", "Humidity", "WindSpeed", "Rainfall", "Temp_Category", "Rain_Status"]],
-                use_container_width=True, height=500)
-    
-    csv = filtered_df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="📥 Download Filtered Data as CSV",
-        data=csv,
-        file_name="weather_data_filtered.csv",
-        mime="text/csv"
-    )
+    st.markdown("#### 📋 Filtered Historical Data Records")
+    st.dataframe(filtered_df, use_container_width=True)
 
 with tab5:
-    st.markdown("#### 🤖 Model Performance & Insights")
-    
-    X_full = df[["Humidity", "WindSpeed", "Rainfall"]]
-    y_true = df["Temperature"]
-    y_pred = model.predict(X_full)
-    
-    col_g, col_h = st.columns(2)
-    
-    with col_g:
-        st.markdown("#### Actual vs Predicted")
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=y_true, y=y_pred, mode="markers",
-                                marker=dict(color="#1e88e5", size=8, opacity=0.7),
-                                name="Predictions"))
-        fig.add_trace(go.Scatter(x=[y_true.min(), y_true.max()],
-                                y=[y_true.min(), y_true.max()],
-                                mode="lines", line=dict(color="#e53935", dash="dash"),
-                                name="Perfect Prediction"))
-        fig.update_layout(
-            xaxis_title="Actual Temperature (°C)",
-            yaxis_title="Predicted Temperature (°C)",
-            template="plotly_white",
-            height=400
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col_h:
-        st.markdown("#### Prediction Error Distribution")
-        errors = y_true - y_pred
-        fig = px.histogram(x=errors, nbins=20, color_discrete_sequence=["#43a047"],
-                          title="Residual Error Distribution",
-                          labels={"x": "Error (Actual - Predicted)"})
-        fig.update_layout(template="plotly_white", height=400)
-        fig.add_vline(x=0, line_dash="dash", line_color="red")
-        st.plotly_chart(fig, use_container_width=True)
-    
-    mse = np.mean((y_true - y_pred) ** 2)
-    rmse = np.sqrt(mse)
-    mae = np.mean(np.abs(y_true - y_pred))
-    r2 = 1 - (np.sum((y_true - y_pred) ** 2) / np.sum((y_true - y_true.mean()) ** 2))
-    
-    st.markdown("#### Model Metrics")
-    mc1, mc2, mc3, mc4 = st.columns(4)
-    mc1.metric("R² Score", f"{r2:.3f}")
-    mc2.metric("RMSE", f"{rmse:.2f}°C")
-    mc3.metric("MAE", f"{mae:.2f}°C")
-    mc4.metric("Model Type", "Linear Regression")
-    
-    st.markdown("#### Feature Importance (Coefficients)")
-    coef_df = pd.DataFrame({
-        "Feature": ["Humidity", "Wind Speed", "Rainfall"],
-        "Coefficient": model.coef_,
-        "Impact": ["Decreases Temp" if c < 0 else "Increases Temp" for c in model.coef_]
-    })
-    fig = px.bar(coef_df, x="Feature", y="Coefficient", color="Impact",
-                color_discrete_map={"Decreases Temp": "#e53935", "Increases Temp": "#43a047"},
-                title="How Each Feature Affects Temperature Prediction")
-    fig.update_layout(template="plotly_white")
-    st.plotly_chart(fig, use_container_width=True)
-    
-    st.info(f"📌 **Insight:** The model equation is: **Temperature = {model.intercept_:.2f} + ({model.coef_[0]:.3f} × Humidity) + ({model.coef_[1]:.3f} × WindSpeed) + ({model.coef_[2]:.3f} × Rainfall)**")
-
-# Footer
-st.markdown("---")
-st.markdown("<div style='text-align: center; color: #888;'>🌦 Weather Forecast Dashboard | Built with Streamlit & Plotly | 100 Days Dataset</div>", unsafe_allow_html=True)
+    st.markdown("#### 🔬 Predictive Model Insights")
+    st.info("The application calculates live inferences using a serialized backend machine learning model pipeline.")
+    st.write("### Model Training Information & Target Features:")
+    st.write("- **Features Evaluated:** Humidity, WindSpeed, Rainfall")
+    st.write("- **Pipeline Origin File:** `weather_model.pkl` via `pickle` system integration.")
