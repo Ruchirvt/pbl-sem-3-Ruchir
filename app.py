@@ -139,7 +139,7 @@ mcol1, mcol2, mcol3, mcol4, mcol5 = st.columns(5)
 
 with mcol1:
     st.markdown(f'''<div class="metric-card" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);">
-        <div class="metric-value">{filtered_df["Temperature"].mean():.1f}°C</div>
+        st.markdown(f'<div class="metric-value">{filtered_df["Temperature"].mean():.1f}°C</div>', unsafe_allow_html=True)
         <div class="metric-label">Avg Temperature</div>
     </div>''', unsafe_allow_html=True)
 
